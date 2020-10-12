@@ -413,8 +413,8 @@
             value: true
           }
         },
-        // vertexShader: document.getElementById( 'vertexShader' ).textContent,
-        // fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+        vertexShader: document.getElementById( 'vertexShader' ).textContent,
+        fragmentShader: document.getElementById( 'fragmentShader' ).textContent
       });
       var geo = new THREE.IcosahedronBufferGeometry(3, 7);
       var mesh = new THREE.Points(geo, mat);
