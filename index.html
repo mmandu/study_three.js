@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>My first three.js app</title>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+
+  <script src="js/three.js"></script>
+  <script>
+    var scene = new THREE.Scene();
+
+    // [인자]
+    // 첫번째 : FOV 시야각 (시야가 닿는 영역) 90 값은 전방위 1/4 보임
+    // 두번째 : aspect ratio 화면의 가로세로 비율
+    // 세번째 : 근거리 클리핑 평면
+    // 네번째 : 원거리 클리핑 평면
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    const canvas = document.querySelector('#c');
+
+    var renderer = new THREE.WebGLRenderer({canvas: canvas});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    //// renderer dom 사용
+    // var renderer = new THREE.WebGLRenderer();
+    // renderer.setSize(window.innerWidth, window.innerHeight);
+    // document.body.appendChild(renderer.domElement);
+
+    var geometry = new THREE.BoxGeometry();
+    var material = new THREE.MeshPhongMaterial({
+      color: 0x00ff00
+    });
+    var cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    const color = 0xFFFFFF;
+    const intensity = 1;
+    const light = new THREE.DirectionalLight(color, intensity);
+    light.position.set(1, 2, 4);
+    scene.add(light);
+
+    
+    camera.position.z = 5;
+
+    function animate() {
+      // 브라우저에 애니메이션 프레임을 요청하는 함수
+      requestAnimationFrame(animate);
+
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
+
+      // camera.position.z += 0.01;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+
+</html>

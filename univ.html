@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>My first three.js app</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+    }
+    #c {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+
+  <script src="js/three.js"></script>
+  <script>
+    function main() {
+      const canvas = document.querySelector('#c');
+      const renderer = new THREE.WebGLRenderer({canvas});
+
+      const fov = 40;
+      const aspect = 2;  // the canvas default
+      const near = 0.1;
+      const far = 1000;
+      const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      camera.position.set(0, 0, 200);
+      // camera.up.set(0, 0, 1);
+      camera.lookAt(1, 0, 0);
+
+      const scene = new THREE.Scene();
+
+      {
+        const color = 0xFFFFFF;
+        const intensity = 3;
+        const light = new THREE.PointLight(color, intensity);
+        scene.add(light);
+      }
+
+      // an array of objects who's rotation to update
+      const objects = [];
+
+      const radius = 1;
+      const widthSegments = 6;
+      const heightSegments = 6;
+      const sphereGeometry = new THREE.SphereBufferGeometry(radius, widthSegments, heightSegments);
+console.log(sphereGeometry);
+      const solarSystem = new THREE.Object3D();
+      scene.add(solarSystem);
+      objects.push(solarSystem);
+
+      const sunMaterial = new THREE.MeshNormalMaterial({emissive: 0xFFFF00, flatShading: true, side: THREE.DoubleSide,});
+      const sunMesh = new THREE.Mesh(sphereGeometry, sunMaterial);
+      sunMesh.scale.set(5, 5, 5);
+
+      // const sunMaterial = new THREE.MeshPhongMaterial({emissive: 0xFFFF00, flatShading: true, side: THREE.DoubleSide,});
+      
+
+      solarSystem.add(sunMesh);
+      objects.push(sunMesh);
+
+console.log(sunMesh.position);
+      // const earthMaterial = new THREE.MeshPhongMaterial({color: 0x2233FF, emissive: 0x112244});
+      // const earthMesh = new THREE.Mesh(sphereGeometry, earthMaterial);
+      // earthMesh.position.x = 10;
+      // solarSystem.add(earthMesh);
+      // objects.push(earthMesh);
+
+      // // const moonOrbit = new THREE.Object3D();
+      // // moonOrbit.position.x = 2;
+      // // earthOrbit.add(moonOrbit);
+      
+      // const moonMaterial = new THREE.MeshPhongMaterial({color: 0x888888, emissive: 0x222222});
+      // const moonMesh = new THREE.Mesh(sphereGeometry, moonMaterial);
+      // moonMesh.position.x = 2;
+      // moonMesh.scale.set(.5, .5, .5);
+      // earthMesh.add(moonMesh);
+      // objects.push(moonMesh);
+
+
+      /* 
+      * 축과 격자를 동시에 켜고 끕니다
+      * dat.GUI가 체크박스를 만들게 하려면 boolean 타입의
+      * 속성을 지정해줘야 하므로, `visible` 속성에
+      * getter와 setter를 지정해 dat.GUI가 이 속성을
+      * 바라보도록 합니다
+      */
+      class AxisGridHelper {
+        constructor(node, units = 10) {
+          const axes = new THREE.AxesHelper();
+          axes.material.depthTest = false;
+          axes.renderOrder = 2;  // 격자 다음에 렌더링
+          node.add(axes);
+      
+          const grid = new THREE.GridHelper(units, units);
+          grid.material.depthTest = false;
+          grid.renderOrder = 1;
+          node.add(grid);
+      
+          this.grid = grid;
+          this.axes = axes;
+          this.visible = false;
+        }
+        get visible() {
+          return this._visible;
+        }
+        set visible(v) {
+          this._visible = v;
+          this.grid.visible = v;
+          this.axes.visible = v;
+        }
+      }
+
+      function makeAxisGrid(node, label, units) {
+        const axes = new THREE.AxesHelper();
+        axes.material.depthTest = false;
+        axes.renderOrder = 2;  // 격자 다음에 렌더링
+        node.add(axes);
+
+
+        const grid = new THREE.GridHelper(units, units);
+        grid.material.depthTest = false;
+        grid.renderOrder = 1;
+        node.add(grid);
+
+        
+        grid.visible = true;
+        axes.visible = true;
+      }
+      
+      // makeAxisGrid(solarSystem, 'solarSystem', 25);
+      makeAxisGrid(sunMesh, 'sunMesh');
+      // makeAxisGrid(earthOrbit, 'earthOrbit');
+      // makeAxisGrid(earthMesh, 'earthMesh');
+      // makeAxisGrid(moonMesh, 'moonMesh');
+
+
+      function resizeRendererToDisplaySize(renderer) {
+        const canvas = renderer.domElement;
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const needResize = canvas.width !== width || canvas.height !== height;
+        if (needResize) {
+          renderer.setSize(width, height, false);
+        }
+        return needResize;
+      }
+
+      function render(time) {
+        // console.log(time);
+        time *= 0.0001;
+
+        if (resizeRendererToDisplaySize(renderer)) {
+          const canvas = renderer.domElement;
+          camera.aspect = canvas.clientWidth / canvas.clientHeight;
+          camera.updateProjectionMatrix();
+        }
+
+        // const arr = [objects[0]];
+        objects.forEach((obj) => {
+          obj.rotation.y = time;
+        });
+
+        renderer.render(scene, camera);
+
+        requestAnimationFrame(render);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    main();
+  </script>
+</body>
+
+</html>
+
