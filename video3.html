@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js - kinect</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+html,
+body,
+overflow hidden,
+canvas {
+  width: 100%;
+  height: 100%;
+}
+.buttons {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+body {
+  margin: 0;
+  background-color: #000;
+}
+#stats {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  z-index: 1000;
+}
+#image {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  z-index: 1001;
+  width: 160px;
+  height: 160px;
+}
+#image img {
+  width: 100%;
+}
+video {
+  position: absolute;
+  z-index: 330;
+  opacity: 1;
+  top: -100%;
+  left: -100%;
+  width: 640px;
+}
+
+    </style>
+	</head>
+	<body>
+
+			
+<div id="container"></div>
+<div id="stats"></div>
+<div id="image"></div>
+<video id="bgVideo" controls="controls" crossOrigin="anonymous" muted="muted" autoplay="autoplay" playsinline="playsinline" loop="loop">
+  <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4"/>
+</video>
+<script id="vertexShader" type="x-shader/x-vertex">
+  attribute float size;
+  varying vec4 mvPosition;
+  //attribute vec3 customColor;
+  //varying vec3 vColor;
+  //-
+  void main() {
+  	//vColor = customColor;
+  	mvPosition = modelViewMatrix * vec4( position, 1.0 );
+  	gl_PointSize = size * ( 300.0 / -mvPosition.z );
+  	gl_Position = projectionMatrix * mvPosition;
+  }
+  
+</script>
+<script id="fragmentShader" type="x-shader/x-fragment">
+  uniform vec2 resolution;
+  //uniform vec3 color;
+  uniform sampler2D texture;
+  uniform sampler2D textureShadow;
+  uniform sampler2D textureLight;
+  uniform sampler2D image;
+  uniform vec2 texture_size;
+  varying vec4 mvPosition;
+  //varying vec3 vColor;
+  const float pixelSize = 12.0;
+  
+  //- Multiply
+  vec4 blendMultiply(vec4 base, vec4 blend) {
+  	return base*blend;
+  }
+  vec4 blendMultiply(vec4 base, vec4 blend, float opacity) {
+  	return (blendMultiply(base, blend) * opacity + base * (1.0 - opacity));
+  }
+  
+  //- Screen
+  float blendScreen(float base, float blend) {
+  	return 1.0-((1.0-base)*(1.0-blend));
+  }
+  vec4 blendScreen(vec4 base, vec4 blend) {
+  	return vec4(blendScreen(base.r,blend.r),blendScreen(base.g,blend.g),blendScreen(base.b,blend.b), blendScreen(base.a,blend.a));
+  }
+  vec4 blendScreen(vec4 base, vec4 blend, float opacity) {
+  	return (blendScreen(base, blend) * opacity + base * (1.0 - opacity));
+  }
+  
+  //-
+  void main() {
+  	vec2 st = (gl_FragCoord.xy / resolution.xy );
+  	//-
+  	vec2 imgCoords = mvPosition.xy;
+  	imgCoords += (texture_size * 0.5);
+  	//imgCoords.y += (texture_size.y * 0.5);
+  	imgCoords = imgCoords / (texture_size.xy);
+  	
+  	/*/-
+  	float dx = pixelSize * (1.0 / resolution.x);
+  	float dy = pixelSize * (1.0 / resolution.y);
+  	imgCoords = vec2(dx * floor(imgCoords.x / dx), dy * floor(imgCoords.y / dy));
+  	//*/
+  										
+  	vec4 pix1 = texture2D(image, imgCoords );
+  	//-
+  	//vec4 origColor = vec4( color * vColor, 1.0 );
+  	vec4 origColor = vec4( pix1.rgb, 1.0 );
+  	origColor = origColor * texture2D( texture, gl_PointCoord );
+  	
+  	//-
+  	vec4 light = texture2D( textureLight, gl_PointCoord );
+  	vec4 shadow = texture2D( textureShadow, gl_PointCoord );
+  	//-
+  	
+  	vec4 newCol = origColor; 
+  	newCol = blendScreen(newCol, light, 0.3);
+  	newCol = blendMultiply(newCol, shadow, 0.8);
+  	
+  	//-
+  	gl_FragColor = newCol;
+  }
+</script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/105/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js"></script>
+<script src="https://threejs.org/examples/js/controls/TrackballControls.js"></script>
+
+    <script type="module">
+
+var WIDTH = window.innerWidth,
+		HEIGHT = window.innerHeight;
+//-
+var camera, scene, renderer, controls, statsFps, statsMs;
+var knot, canvasVid, ctxVid, video,
+		lado = 200,
+		sizeKnit = 12;
+
+//-
+var bufferGeometry, shaderMaterial,
+		uniforms = {
+			resolution: 	{ type: "v2", value: new THREE.Vector2(1.0, 1.0) },
+			//color:     		{ value: new THREE.Color( 0xffffff ) },
+			texture: 			{ value: null },
+			textureShadow: { value: null },
+			textureLight: { value: null },
+			image: 				{ value: null },
+			texture_size: { type: "v2", value: new THREE.Vector2( 100, 100) }
+		};
+//-
+
+var w = lado,
+		h = lado,
+		gruix = 1.0,
+		wKnit = sizeKnit / 4.35,
+		hKnit = wKnit * 0.75,
+		center,
+		positions, colors, sizes,
+		textures = {
+			tex: {src:'https://res.cloudinary.com/grooo/image/upload/v1496849274/knit4_zxra7g.png'},
+			shadow: {src:'https://res.cloudinary.com/grooo/image/upload/v1497353036/knit4-shadow_mlgwkz.png'},
+			overlay: {src:'https://res.cloudinary.com/grooo/image/upload/v1497353036/knit4-light_viroi3.png'},
+			image: {src: 'https://unsplash.it/'+lado+'/'+lado+'?random'}
+		},
+		allTextures = [textures.tex, textures.shadow, textures.overlay, textures.image];
+//-
+$(document).ready(function(){
+	
+	function init() {
+		renderer = new THREE.WebGLRenderer({
+				antialias: true,
+				preserveDrawingBuffer: true /* imprescindible para hacer screenshoots */ /*,
+				sortObjects: false,
+				sortElements: false*/
+			});
+		//renderer.shadowMap.enabled = true;
+		//renderer.shadowMap.type = THREE.PCFShadowMap;
+		renderer.setPixelRatio( window.devicePixelRatio / 1 );
+		renderer.setSize( WIDTH, HEIGHT );
+		$('#container').append( renderer.domElement );
+		scene = new THREE.Scene();
+		//scene.background = new THREE.Color( 0x222222 );
+		//-
+		camera = new THREE.PerspectiveCamera( 45, WIDTH / HEIGHT, 1, 2000 );
+    camera.position.z = 400;
+		//-
+		scene.add( new THREE.AmbientLight( 0xff4444 ) );
+		//-
+		var light1 = new THREE.DirectionalLight( 0xffffff, 1.0 );
+		light1.position.set( 0.5, -1, 1 );
+		scene.add( light1 );
+		//-
+		var light2 = new THREE.DirectionalLight( 0xff0000, 0.5 );
+		light2.position.set( -0.5, -1.5, 2 );
+		scene.add( light2 );
+		/*/-
+		controls = new THREE.TrackballControls( camera, renderer.domElement );
+		controls.minDistance = 20.0;
+		controls.maxDistance = 1000.0;
+		controls.dynamicDampingFactor = 0.5;
+		//controls.noRotate = true;
+		// controls.noZoom = true;
+		//-
+		*/
+		statsFps = new Stats();
+    $('#stats').append( statsFps.domElement );
+
+    statsMs = new Stats();
+    statsMs.showPanel(1);
+   	$('#stats').append( statsMs.domElement );
+		//-
+		window.addEventListener( 'resize', onWindowResize, false );
+		onWindowResize();
+		
+		//- Load Textures
+		loadTexture( textures.tex );
+		loadTexture( textures.shadow );
+		loadTexture( textures.overlay );
+		/*
+		loadTexture( textures.image );
+		/*/ //- Video texture
+		video = $("video#bgVideo")[0];
+		video.addEventListener("canplay", onVideoReady);
+		//- Hack for mobile & tablet
+		//- renderer.domElement.addEventListener("click", function(){
+				//- video.play();
+		//- });
+		//*/
+		//createScene();
+	}
+	
+	//- All textures Loaded?
+	function loadTexture( _obj ){
+		var textureLoader = new THREE.TextureLoader();
+		textureLoader.crossOrigin = '';
+		textureLoader.load( _obj.src, function( _tex ){
+			_obj.tex = _tex;
+			//-
+			if( isTexturesLoaded(allTextures) ){
+				createScene();
+			}
+		});
+	}
+
+	function isTexturesLoaded( _array ){
+		var ok = true;
+		$.each( _array, function( index, value ) {
+			if( !value.tex ){
+				ok = false;
+			};
+		});
+		return ok;
+	}
+	
+	var onVideoReady = function(){
+		video.play();
+		canvasVid = document.createElement("canvas");
+		ctxVid = canvasVid.getContext("2d");
+		//Set the dimension of the canvas --> Should always be power of 2 (256,512,1024, etc)
+		canvasVid.width = 1024;
+		canvasVid.height = 1024;
+		/*/ //- Chivato
+		document.body.appendChild(canvasVid);
+		canvasVid.style.position="absolute";
+		canvasVid.style.bottom = "0px";
+		canvasVid.style.right = "0px";
+		canvasVid.style.width = "200px";
+		canvasVid.style.zIndex = "400";
+		//*/
+
+		//-
+		textures.image.tex = new THREE.CanvasTexture(canvasVid);
+
+		//- No sé porqué si no se hace en ambos no funciona
+		textures.image.needsUpdate = true;
+		//material.needsUpdate = true;
+
+		//Remove the event listener on 'canplay' event
+		video.removeEventListener("canplay", onVideoReady);
+		
+		//-
+		if( isTexturesLoaded(allTextures) ){
+			createScene();
+		}
+	};
+
+	//-
+	function createScene() {
+		
+		// material
+		uniforms.texture = { value: textures.tex.tex };
+		uniforms.textureShadow = { value: textures.shadow.tex };
+		uniforms.textureLight = { value: textures.overlay.tex };
+		uniforms.image = { value: textures.image.tex };
+		uniforms.texture_size = { type: "v2", value: new THREE.Vector2( lado * wKnit, lado * wKnit) };
+
+			//-
+		shaderMaterial = new THREE.ShaderMaterial( {
+			uniforms:       uniforms,
+			vertexShader:   document.getElementById( 'vertexShader' ).textContent,
+			fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
+			//blending:       THREE.AdditiveBlending,
+			depthTest:      false,
+			transparent:    true
+		});
+			
+		//- Geometry
+		var positions 	= []
+		var colors 			= [];
+		var color 			= new THREE.Color( 0xffffff );
+		var sizes 			= [];
+		var i 			= 0, 
+				i3 			= 0;
+		center = new THREE.Vector2((wKnit * w) / 2, (hKnit * h) / 2)
+		//-
+		for ( var y = 0; y <= h; y++ ) {
+			for ( var x = 0; x <= w; x++ ) {
+				color = new THREE.Color();
+				color.setHSL( ( x / w ), 1.0, 0.7 );
+				//-
+				colors.push(color.r);
+				colors.push(color.g);
+				colors.push(color.b);
+
+				/*/-
+				positions.push( center.x - (x * wKnit) + randDif(0.2) );
+				positions.push( randDif(0.4) );
+				positions.push( center.y - (y * hKnit) + randDif(0.2) );
+				/*/
+				positions.push( center.x - (x * wKnit) );
+				positions.push( 0.0 );
+				positions.push( center.y - (y * hKnit) );
+				//*/
+
+				//-
+				sizes[ i ] = 15;
+
+				//-
+				i3 += 3;
+				i++;
+			}
+		}
+		//-
+		console.log( i + ' knits');
+		//-
+		bufferGeometry = new THREE.BufferGeometry();
+		//-
+		bufferGeometry.addAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+		bufferGeometry.addAttribute( 'customColor', new THREE.Float32BufferAttribute( colors, 3 ) );
+		bufferGeometry.addAttribute( 'size', new THREE.Float32BufferAttribute( sizes, 1 ) );		
+
+		// point cloud
+		var knits = new THREE.Points( bufferGeometry, shaderMaterial );
+		knits.rotateX( THREE.Math.degToRad( -90 ) );
+		scene.add( knits );
+		
+		
+		//- Chivato
+		// document.getElementById("image").appendChild( textures.image.tex.image );
+	}
+	//-
+	function updateColors( _time ){
+		if( bufferGeometry ){
+			//- Draw the video in the canvas
+			if(ctxVid){
+				ctxVid.drawImage(video, 0, 0, canvasVid.width, canvasVid.height);
+				//- Warn ThreeJs that the texture should be updated
+				textures.image.tex.needsUpdate = true;
+			}
+			/*
+			var colors = bufferGeometry.attributes.customColor.array,
+					i = 0;
+			//-
+			for ( var y = 0; y <= h; y++ ) {
+				for ( var x = 0; x <= w; x++ ) {
+					//-
+					var grey = Math.random(); // white noise
+					colors[i  ] 	= grey; // R
+					colors[i+1] 	= grey; // G
+					colors[i+2] 	= grey; // B
+					i += 3;
+				}
+			}
+			bufferGeometry.attributes.customColor.needsUpdate = true;
+			*/
+		}
+	};
+	
+	//-
+	function onWindowResize() {
+		WIDTH = window.innerWidth;
+		HEIGHT = window.innerHeight;
+		//-
+		if( renderer ){
+			camera.aspect = WIDTH / HEIGHT;
+			camera.updateProjectionMatrix();
+			renderer.setSize( WIDTH, HEIGHT );
+			//-
+			uniforms.resolution.value.x = renderer.domElement.width;
+			uniforms.resolution.value.y = renderer.domElement.height;
+		}
+	}
+	function animate( time ) {
+		requestAnimationFrame( animate );
+		var time = Date.now() * 0.002;
+		//-
+		updateColors( time );
+		//-
+		//controls.update();
+		statsFps.update();
+		statsMs.update();
+		renderer.render( scene, camera );
+	}
+	
+	
+	init();
+	animate();
+});
+
+//- Functions
+function randDif( _val ){
+	return (_val * -0.5) + (Math.random()*_val);
+}
+
+    </script>
+	</body>
+</html>
